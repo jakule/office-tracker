@@ -1,0 +1,6 @@
+__pycache__
+front/dist
+data
+venv
+app.log
+front/node_modules
