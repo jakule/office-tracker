@@ -1,6 +1,7 @@
 __pycache__
-front/dist
+frontend/dist
+frontend/node_modules
+
 data
 venv
-app.log
-front/node_modules
+*.log
