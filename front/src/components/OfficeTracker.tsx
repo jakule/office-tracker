@@ -1,13 +1,25 @@
-import { useState, useEffect } from 'react';
-// import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card"
-import { Calendar, CheckCircle2, XCircle, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
+import { Calendar, CheckCircle2, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 
-// API configuration
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+interface Holiday {
+  date: string;
+  name: string;
+}
+
+interface CalendarDay {
+  date: string;
+  dayOfMonth: number;
+  isWeekend: boolean;
+  holiday?: Holiday;
+}
+
+interface AttendanceRecord {
+  [date: string]: boolean;
+}
 
 // US Federal Holidays 2024
-const HOLIDAYS_2024 = [
+const HOLIDAYS_2024: Holiday[] = [
   { date: '2024-01-01', name: "New Year's Day" },
   { date: '2024-01-15', name: "Martin Luther King Jr. Day" },
   { date: '2024-02-19', name: "Presidents' Day" },
@@ -21,82 +33,16 @@ const HOLIDAYS_2024 = [
   { date: '2024-12-25', name: "Christmas Day" }
 ];
 
-const OfficeTracker = () => {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [officeAttendance, setOfficeAttendance] = useState<Record<string, boolean>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<null | string>(null);
+const OfficeTracker: React.FC = () => {
+  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  const [officeAttendance, setOfficeAttendance] = useState<AttendanceRecord>({});
 
-  // Fetch attendance data from the server
-  const fetchAttendanceData = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${API_URL}/attendance`);
-      if (!response.ok) throw new Error('Failed to fetch attendance data');
-      const data = await response.json();
-      setOfficeAttendance(data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load attendance data. Please try again later.');
-      console.error('Error fetching attendance:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Update attendance on the server
-  const updateAttendance = async (date: any, attended: any) => {
-    try {
-      const response = await fetch(`${API_URL}/attendance`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ date, attended }),
-      });
-      
-      if (!response.ok) throw new Error('Failed to update attendance');
-      
-      // Update local state after successful server update
-      setOfficeAttendance(prev => ({
-        ...prev,
-        [date]: attended,
-      }));
-      
-      setError(null);
-    } catch (err) {
-      setError('Failed to update attendance. Please try again.');
-      console.error('Error updating attendance:', err);
-    }
-  };
-
-  // Load initial data
-  useEffect(() => {
-    fetchAttendanceData();
-  }, []);
-
-  // Navigate between months
-  const navigateMonth = (direction: number) => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev);
-      newDate.setMonth(prev.getMonth() + direction);
-      return newDate;
-    });
-  };
-  
-  // Generate calendar data for the current month
-  const generateCalendarDays = () => {
+  const generateCalendarDays = (): CalendarDay[] => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    const days = [];
-
-    // Add empty cells for days before the first day of the month
-    const firstDayOfWeek = firstDay.getDay();
-    for (let i = 0; i < firstDayOfWeek; i++) {
-      days.push({ empty: true });
-    }
+    const days: CalendarDay[] = [];
 
     for (let date = new Date(firstDay); date <= lastDay; date.setDate(date.getDate() + 1)) {
       const dateStr = date.toISOString().split('T')[0];
@@ -114,125 +60,137 @@ const OfficeTracker = () => {
     return days;
   };
 
-  // Calculate attendance percentage
-  const calculateAttendance = (days: any) => {
-    const workdays = days.filter((day: { date: any; isWeekend: any; holiday: any; }) => day.date && !day.isWeekend && !day.holiday);
-    const totalWorkdays = workdays.length;
-    const daysInOffice = workdays.filter((day: { date: string | number; }) => officeAttendance[day.date]).length;
-    return totalWorkdays === 0 ? 0 : (daysInOffice / totalWorkdays) * 100;
+  const calculateAttendance = (days: CalendarDay[]): number => {
+    const workdays = days.filter(day => !day.isWeekend && !day.holiday);
+    const daysInOffice = workdays.filter(day => officeAttendance[day.date]).length;
+    return workdays.length === 0 ? 0 : (daysInOffice / workdays.length) * 100;
   };
 
-  // Toggle attendance for a specific date
-  const toggleAttendance = (date: string) => {
-    const newAttendance = !officeAttendance[date];
-    updateAttendance(date, newAttendance);
+  const navigateMonth = (direction: number): void => {
+    setCurrentMonth(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(prev.getMonth() + direction);
+      return newDate;
+    });
+  };
+
+  const toggleAttendance = (date: string): void => {
+    setOfficeAttendance(prev => ({
+      ...prev,
+      [date]: !prev[date]
+    }));
   };
 
   const days = generateCalendarDays();
   const attendancePercentage = calculateAttendance(days);
-  const progressColor = attendancePercentage >= 80 ? 'bg-green-500' : 'bg-yellow-500';
 
   return (
-    <Card className="w-full max-w-4xl">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2">
-          <Calendar className="w-6 h-6" />
-          Office Attendance Tracker
-        </CardTitle>
-        <div className="flex items-center gap-4">
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader className="border-b">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-2xl">
+            <Calendar className="h-6 w-6" />
+            Office Attendance Tracker
+          </CardTitle>
+        </div>
+        <div className="flex items-center justify-start gap-4 mt-4">
           <button 
             onClick={() => navigateMonth(-1)}
-            className="p-1 rounded-full hover:bg-gray-100"
+            className="p-2 border rounded hover:bg-gray-100"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
-          <div className="text-sm text-gray-500 min-w-[120px] text-center">
+          <span className="text-xl font-normal">
             {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-          </div>
+          </span>
           <button 
             onClick={() => navigateMonth(1)}
-            className="p-1 rounded-full hover:bg-gray-100"
+            className="p-2 border rounded hover:bg-gray-100"
           >
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       </CardHeader>
-      <CardContent>
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
-            {error}
-          </div>
-        )}
 
-        {/* Progress bar */}
+      <CardContent className="pt-6">
+        {/* Progress section */}
         <div className="mb-6">
-          <div className="flex justify-between mb-2">
-            <span className="text-sm font-medium">Office Attendance Progress</span>
-            <span className="text-sm font-medium">{attendancePercentage.toFixed(1)}%</span>
+          <div className="text-lg">
+            Office Attendance Progress {attendancePercentage.toFixed(1)}%
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div className="text-gray-500">Target: 80%</div>
+          <div className="mt-2 h-2 w-full bg-gray-200 rounded-full">
             <div
-              className={`h-2.5 rounded-full ${progressColor} transition-all duration-300`}
+              className="h-2 rounded-full bg-blue-500 transition-all duration-300"
               style={{ width: `${Math.min(100, attendancePercentage)}%` }}
-            ></div>
+            />
           </div>
-          <div className="text-xs text-gray-500 mt-1">Target: 80%</div>
         </div>
 
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-1">
+        {/* Calendar */}
+        <div>
           {/* Day headers */}
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="text-center font-medium text-sm p-2">
-              {day}
-            </div>
-          ))}
-          
-          {/* Calendar days */}
-          {days.map((day, index) => (
-            day.empty ? (
-              <div key={`empty-${index}`} className="p-2" />
-            ) : (
-              <div
-                key={day.date}
-                className={`
-                  p-2 border rounded-lg text-center relative
-                  ${day.isWeekend ? 'bg-gray-100' : 'hover:bg-gray-50 cursor-pointer'}
-                  ${day.holiday ? 'bg-red-50' : ''}
-                  ${loading ? 'opacity-50' : ''}
-                  transition-all duration-200
-                `}
-                onClick={() => !day.isWeekend && !day.holiday && !loading && toggleAttendance(day.date ?? "")}
-              >
-                <div className="text-sm">{day.dayOfMonth}</div>
-                {!day.isWeekend && !day.holiday && (
-                  officeAttendance[day.date ?? ""] ? 
-                    <CheckCircle2 className="w-4 h-4 text-green-500 mx-auto mt-1" /> :
-                    <XCircle className="w-4 h-4 text-gray-300 mx-auto mt-1" />
-                )}
-                {day.holiday && (
-                  <div className="absolute bottom-0 left-0 right-0 text-xs text-red-500 truncate px-1">
-                    {day.holiday.name}
-                  </div>
-                )}
+          <div className="grid grid-cols-7">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="p-2 text-center font-medium">
+                {day}
               </div>
-            )
-          ))}
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div className="grid grid-cols-7 gap-[1px] bg-gray-200">
+            {days.map((day) => {
+              const isToday = day.date === new Date().toISOString().split('T')[0];
+              
+              return (
+                <div
+                  key={day.date}
+                  className={`
+                    bg-white p-4 min-h-[80px] relative
+                    ${!day.isWeekend && !day.holiday ? 'cursor-pointer hover:bg-gray-50' : ''}
+                    ${day.isWeekend ? 'bg-gray-50' : ''}
+                    ${day.holiday ? 'bg-red-50' : ''}
+                  `}
+                  onClick={() => !day.isWeekend && !day.holiday && toggleAttendance(day.date)}
+                >
+                  <div className={`font-medium ${isToday ? 'text-blue-600' : ''}`}>
+                    {day.dayOfMonth}
+                  </div>
+                  
+                  {!day.isWeekend && !day.holiday && (
+                    <div className="mt-2">
+                      {officeAttendance[day.date] ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-gray-300" />
+                      )}
+                    </div>
+                  )}
+                  
+                  {day.holiday && (
+                    <div className="text-xs text-red-500 mt-1">
+                      {day.holiday.name}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Legend */}
-        <div className="mt-6 flex gap-4 text-sm text-gray-600 flex-wrap">
+        <div className="mt-6 flex gap-4 text-sm text-gray-600">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-green-500" />
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
             <span>In Office</span>
           </div>
           <div className="flex items-center gap-2">
-            <XCircle className="w-4 h-4 text-gray-300" />
+            <XCircle className="h-4 w-4 text-gray-300" />
             <span>Remote</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-50 border rounded"></div>
+            <div className="h-4 w-4 rounded bg-red-50 border" />
             <span>Holiday</span>
           </div>
         </div>
