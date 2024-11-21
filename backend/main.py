@@ -1,14 +1,13 @@
 # main.py
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from pathlib import Path
 import json
 from typing import Dict, Optional
 import logging
 from datetime import date
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -24,10 +23,13 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(title="Office Attendance Tracker API")
 
+# Get CORS origins from environment variable or use default
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost").split(",")
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your frontend domain
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,14 +107,6 @@ async def update_attendance(update: AttendanceUpdate):
     except Exception as e:
         logger.error(f"Error in update_attendance: {e}")
         return AttendanceResponse(success=False, error=str(e))
-
-# Serve static files from the React build directory
-app.mount("/", StaticFiles(directory="front/dist", html=True), name="static")
-
-# For handling client-side routing
-@app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
-    return FileResponse("frontend/dist/index.html")
 
 if __name__ == "__main__":
     import uvicorn
